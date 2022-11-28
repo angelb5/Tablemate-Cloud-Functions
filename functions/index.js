@@ -83,13 +83,19 @@ exports.deleteRating = functions.firestore
         const restDoc = await transaction.get(restRef);
 
         // Compute new number of ratings
-        const newNumReviews = restDoc.data().numReviews - 1;
+        let newNumReviews = restDoc.data().numReviews - 1;
 
         // Compute new average rating
         // eslint-disable-next-line max-len
         const oldRatingTotal = restDoc.data().rating * restDoc.data().numReviews;
-        const newRating = (oldRatingTotal - ratingVal) / newNumReviews;
+        let newRating;
 
+        if (newNumReviews <= 0) {
+          newNumReviews = 0;
+          newRating = 0;
+        } else {
+          newRating = (oldRatingTotal - ratingVal) / newNumReviews;
+        }
         // Update restaurant info
         transaction.update(restRef, {
           rating: newRating,
