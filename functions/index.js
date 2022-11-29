@@ -1,3 +1,4 @@
+/* eslint-disable require-jsdoc */
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -103,3 +104,45 @@ exports.deleteRating = functions.firestore
         });
       });
     });
+
+exports.deleteRestaurant = functions.firestore
+    .document("restaurants/{restId}")
+    .onDelete(async (snap, context) => {
+      // Get value of the newly added rating
+      await deleteReviewsCollection(db, context.params.restId, 200);
+    });
+
+
+async function deleteReviewsCollection(db, restaurantId, batchSize) {
+  // eslint-disable-next-line max-len
+  const collectionRef = db.collection("restaurants").document(restaurantId).collection("reviews");
+  const query = collectionRef.limit(batchSize);
+
+  return new Promise((resolve, reject) => {
+    deleteQueryBatch(db, query, resolve).catch(reject);
+  });
+}
+
+async function deleteQueryBatch(db, query, resolve) {
+  const snapshot = await query.get();
+
+  const batchSize = snapshot.size;
+  if (batchSize === 0) {
+  // When there are no documents left, we are done
+    resolve();
+    return;
+  }
+
+  // Delete documents in a batch
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  await batch.commit();
+
+  // Recurse on the next process tick, to avoid
+  // exploding the stack.
+  process.nextTick(() => {
+    deleteQueryBatch(db, query, resolve);
+  });
+}
