@@ -194,3 +194,87 @@ async function deleteQueryBatch(db, query, resolve) {
     deleteQueryBatch(db, query, resolve);
   });
 }
+
+exports.syncReservasUser = functions.firestore
+    .document("users/{uid}")
+    .onUpdate(async (change, context) => {
+      // Get value of the newly added rating
+      const permisos = change.before.data().permisos;
+      if (permisos != "Cliente") {
+        return null;
+      }
+      const uid = context.params.uid;
+      const newAvatarUrl = change.after.data().avatarUrl;
+      // eslint-disable-next-line max-len
+      const newNombre = change.after.data().nombre + " "+change.after.data().apellidos;
+      return new Promise((resolve, reject) => {
+        // eslint-disable-next-line max-len
+        updateReservasClienteBatch(uid, newAvatarUrl, newNombre, resolve).catch(reject);
+        // eslint-disable-next-line max-len
+        updateReviewsClienteBatch(uid, newAvatarUrl, newNombre, resolve).catch(reject);
+      });
+    });
+
+exports.syncReservasRestaurant = functions.firestore
+    .document("restaurants/{id}")
+    .onUpdate(async (change, context) => {
+      // Get value of the newly added rating
+      const id = context.params.id;
+      const oldNombre = change.before.data().nombre;
+      const newNombre = change.after.data().nombre;
+      const oldFotoUrl = change.before.data().fotosUrl[0];
+      const newFotoUrl = change.after.data().fotosUrl[0];
+      if (oldFotoUrl == newFotoUrl && oldNombre == newNombre) {
+        return null;
+      }
+      // eslint-disable-next-line max-len
+      return new Promise((resolve, reject) => {
+        // eslint-disable-next-line max-len
+        updateReservasRestaurantBatch(id, newNombre, newFotoUrl, resolve).catch(reject);
+      });
+    });
+
+async function updateReservasClienteBatch(uid, avatarUrl, nombre, resolve) {
+  const query = db.collection("reservas").where("cliente.uid", "==", uid);
+  const snapshot = await query.get();
+
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, {
+      "cliente.avatarUrl": avatarUrl,
+      "cliente.nombre": nombre,
+    });
+  });
+  await batch.commit();
+  resolve();
+}
+
+async function updateReservasRestaurantBatch(id, nombre, fotoUrl, resolve) {
+  const query = db.collection("reservas").where("restaurant.id", "==", id);
+  const snapshot = await query.get();
+
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, {
+      "restaurant.nombre": nombre,
+      "restaurant.fotoUrl": fotoUrl,
+    });
+  });
+  await batch.commit();
+  resolve();
+}
+
+async function updateReviewsClienteBatch(uid, avatarUrl, nombre, resolve) {
+  const query = db.collectionGroup("reviews").where("user.uid", "==", uid);
+  const snapshot = await query.get();
+
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, {
+      "user.avatarUrl": avatarUrl,
+      "user.nombre": nombre,
+    });
+  });
+  await batch.commit();
+  resolve();
+}
